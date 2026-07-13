@@ -1,0 +1,132 @@
+/* Дизайн-система: тёмная индиго (ТЗ №3 §4) */
+:root {
+  --bg: #0a0a1a;
+  --card: #12122a;
+  --card-hover: #1a1a38;
+  --border: #26264a;
+  --border-soft: #1c1c38;
+  --ink: #e2e8f0;
+  --ink-soft: #94a3b8;
+  --ink-muted: #5b6494;
+  --accent: #818cf8;
+  --amber: #fbbf24;
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-body: 'Inter', -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+}
+
+body {
+  color: var(--ink);
+  font-family: var(--font-body);
+  /* радиальное индиго-свечение поверх deep navy */
+  background:
+    radial-gradient(1100px 600px at 70% -10%, rgba(99, 102, 241, 0.16), transparent 60%),
+    radial-gradient(900px 500px at 0% 100%, rgba(129, 140, 248, 0.07), transparent 55%),
+    var(--bg);
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+input,
+select {
+  font-family: inherit;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slideUp {
+  from { transform: translateY(24px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.9; }
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.animate-fadeIn { animation: fadeIn 0.18s ease-out; }
+.animate-slideUp { animation: slideUp 0.24s cubic-bezier(0.2, 0.7, 0.3, 1); }
+.spin { animation: spin 0.9s linear infinite; transform-origin: 50% 50%; }
+.skeleton {
+  background: var(--card);
+  border-radius: 8px;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+/* ── Responsive (правка №1) ── */
+/* Контейнер: телефон-паддинги → до ~1200px на десктопе. */
+.container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px 14px 56px;
+}
+@media (min-width: 640px) {
+  .container { padding: 24px 20px 64px; }
+}
+@media (min-width: 1024px) {
+  .container { padding: 28px 28px 72px; }
+}
+
+/* Сетка плиток категорий: 1 / 2 / 3 колонки (правки №1, №11). */
+.group-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+@media (min-width: 640px) {
+  .group-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1024px) {
+  .group-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* Сетка маркеров внутри категории / дрилл-даун отклонений. */
+.marker-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+@media (min-width: 640px) {
+  .marker-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (min-width: 1024px) {
+  .marker-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+/* Сетка InBody-снимков (правка №13). */
+.snapshot-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+@media (min-width: 640px) {
+  .snapshot-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1024px) {
+  .snapshot-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* Тач-таргеты ≥40px для основных интерактивных плиток/кнопок. */
+.tap { min-height: 40px; }
