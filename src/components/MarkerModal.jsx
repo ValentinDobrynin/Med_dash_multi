@@ -14,6 +14,9 @@ import TelegramExportButton from './TelegramExportButton.jsx';
 export default function MarkerModal({ marker, weight, onClose }) {
   const priv = usePrivacy();
   const [showWeight, setShowWeight] = useState(false);
+  // Ось Y: true — вмещаем весь референс (норма всегда в кадре); false — только по
+  // данным (крупнее видно динамику, если замеры лежат в узком коридоре).
+  const [fullRef, setFullRef] = useState(true);
 
   // Escape закрывает модалку (правка №2) — чтобы не искать крестик.
   useEffect(() => {
@@ -36,8 +39,12 @@ export default function MarkerModal({ marker, weight, onClose }) {
     });
 
   const values = data.map((d) => d.v);
-  const dataMin = Math.min(...values, marker.refLow ?? Infinity);
-  const dataMax = Math.max(...values, marker.refHigh ?? -Infinity);
+  // fullRef=true — растягиваем ось на границы нормы (вся зелёная зона в кадре);
+  // fullRef=false — только по фактическим значениям (тренд крупнее).
+  const refLoBound = fullRef ? (marker.refLow ?? Infinity) : Infinity;
+  const refHiBound = fullRef ? (marker.refHigh ?? -Infinity) : -Infinity;
+  const dataMin = Math.min(...values, refLoBound);
+  const dataMax = Math.max(...values, refHiBound);
   const pad = (dataMax - dataMin) * 0.12 || Math.abs(dataMax) * 0.1 || 1;
   const yMin = Math.max(0, dataMin - pad);
   const yMax = dataMax + pad;
@@ -98,20 +105,37 @@ export default function MarkerModal({ marker, weight, onClose }) {
             <div style={{ color: T.inkMuted, fontSize: 12 }}>
               {formatDate(marker.last?.date)}{priv ? '' : ` · ${STATUS_LABELS[status]}`}
             </div>
-            {weight && data.some((d) => d.weight != null) && (
-              <button
-                onClick={() => setShowWeight((v) => !v)}
-                style={{
-                  marginLeft: 'auto', fontSize: 11, padding: '5px 10px', borderRadius: 6,
-                  fontFamily: T.fontMono,
-                  background: showWeight ? 'rgba(251,191,36,0.14)' : T.cardHover,
-                  color: showWeight ? T.amber : T.inkSoft,
-                  border: `1px solid ${showWeight ? 'rgba(251,191,36,0.4)' : T.border}`,
-                }}
-              >
-                вес
-              </button>
-            )}
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+              {(hasBand || hasCap || hasFloor) && (
+                <button
+                  onClick={() => setFullRef((v) => !v)}
+                  title={fullRef
+                    ? 'Ось по норме — вся зона референса в кадре'
+                    : 'Ось по данным — тренд крупнее'}
+                  style={{
+                    fontSize: 11, padding: '5px 10px', borderRadius: 6, fontFamily: T.fontMono,
+                    background: fullRef ? T.cardHover : 'rgba(129,140,248,0.14)',
+                    color: fullRef ? T.inkSoft : T.accent,
+                    border: `1px solid ${fullRef ? T.border : T.accent}`,
+                  }}
+                >
+                  {fullRef ? 'ось: норма' : 'ось: данные'}
+                </button>
+              )}
+              {weight && data.some((d) => d.weight != null) && (
+                <button
+                  onClick={() => setShowWeight((v) => !v)}
+                  style={{
+                    fontSize: 11, padding: '5px 10px', borderRadius: 6, fontFamily: T.fontMono,
+                    background: showWeight ? 'rgba(251,191,36,0.14)' : T.cardHover,
+                    color: showWeight ? T.amber : T.inkSoft,
+                    border: `1px solid ${showWeight ? 'rgba(251,191,36,0.4)' : T.border}`,
+                  }}
+                >
+                  вес
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Экспорт PDF в Telegram — наверху, чтобы легко найти (скрыт в приватном режиме) */}
