@@ -239,7 +239,12 @@ function Card({ it, onConfirm, onCancel }) {
       )}
 
       {it.phase === 'reject' && pv && (
-        <div style={{ marginTop: 6, color: '#fcd34d', fontSize: 13, whiteSpace: 'pre-wrap' }}>{pv.summary}</div>
+        <>
+          <div style={{ marginTop: 6, color: '#fcd34d', fontSize: 13, whiteSpace: 'pre-wrap' }}>{pv.summary}</div>
+          <div style={{ marginTop: 4, color: T.inkMuted, fontSize: 11.5, lineHeight: 1.45 }}>
+            Принимаются PDF-анализы с текстовым слоем и видимой датой забора — не сканы-картинки и не выписки/заключения.
+          </div>
+        </>
       )}
       {it.phase === 'error' && (
         <div style={{ marginTop: 6, color: '#fca5a5', fontSize: 13 }}>{it.error}</div>
