@@ -1,17 +1,21 @@
 import { useCallback, useEffect, useState } from 'react';
 import { T } from '../theme.js';
 import {
-  adminCreateInvite, adminOverview, adminRejects, adminResetCode, adminUsers,
+  adminCreateInvite, adminDeleteUser, adminOverview, adminRejects,
+  adminResetCode, adminUsers,
 } from '../api.js';
+import { useMe } from '../me.jsx';
 
 // Admin-вкладка (PLAN_multiuser v3 §7): юзеры, инвайты, reset-коды, reject-логи.
 // Видна только role=admin; авторизация — та же сессия (прокси токенов не несёт).
 export default function AdminScreen() {
+  const me = useMe();
   const [overview, setOverview] = useState(null);
   const [users, setUsers] = useState([]);
   const [invite, setInvite] = useState(null);
   const [resetInfo, setResetInfo] = useState(null);
   const [rejects, setRejects] = useState(null); // {login, items}
+  const [toDelete, setToDelete] = useState(null); // юзер в модалке удаления
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -103,10 +107,17 @@ export default function AdminScreen() {
                       reset-код
                     </button>
                     <button className="tap" disabled={busy}
-                            style={{ background: 'none', border: 'none', color: T.inkMuted, textDecoration: 'underline', fontSize: 12 }}
+                            style={{ background: 'none', border: 'none', color: T.inkMuted, textDecoration: 'underline', fontSize: 12, marginRight: 10 }}
                             onClick={run(async () => setRejects({ login: u.login, items: await adminRejects(u.user_id) }))}>
                       rejects
                     </button>
+                    {u.login !== me?.login && (
+                      <button className="tap" disabled={busy}
+                              style={{ background: 'none', border: 'none', color: '#f87171', textDecoration: 'underline', fontSize: 12 }}
+                              onClick={() => setToDelete(u)}>
+                        удалить
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -142,6 +153,94 @@ export default function AdminScreen() {
           </div>
         </section>
       )}
+
+      {toDelete && (
+        <DeleteUserModal
+          user={toDelete}
+          onClose={() => setToDelete(null)}
+          onDeleted={async () => { setToDelete(null); await load(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// Модалка удаления юзера: необратимо, поэтому требует ввести логин точь-в-точь
+// (то же подтверждение, что и API: confirm === login). PLAN_multiuser v3 §9.
+function DeleteUserModal({ user, onClose, onDeleted }) {
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [result, setResult] = useState(null);
+  const match = typed.trim() === user.login;
+
+  const submit = async () => {
+    if (!match || busy) return;
+    setBusy(true); setError(null);
+    try {
+      const r = await adminDeleteUser(user.user_id, user.login);
+      setResult(r.deleted || {});
+      setTimeout(onDeleted, 1200);
+    } catch (e) {
+      setError(String(e.message || e));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div onClick={onClose}
+         style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(15,17,26,0.72)',
+                  backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center',
+                  justifyContent: 'center', padding: 24 }}>
+      <div onClick={(e) => e.stopPropagation()}
+           style={{ width: 'min(460px, 92vw)', background: T.card,
+                    border: '1px solid rgba(248,113,113,0.5)', borderRadius: 18, padding: 24 }}>
+        <div style={{ fontFamily: T.fontDisplay, fontStyle: 'italic', fontWeight: 500, fontSize: 22, color: '#f87171', margin: '0 0 10px' }}>
+          Удалить пользователя
+        </div>
+
+        {result ? (
+          <div style={{ color: '#6ee7b7', fontSize: 14, lineHeight: 1.6 }}>
+            Удалено. Стёрто: {result.lab_results ?? 0} анализов, {result.weight ?? 0} весов,
+            аккаунт и сессии. Бот отключён.
+          </div>
+        ) : (
+          <>
+            <div style={{ color: T.inkSoft, fontSize: 13.5, lineHeight: 1.6, marginBottom: 14 }}>
+              Это <b style={{ color: T.ink }}>необратимо</b>. Будут стёрты все анализы, вес,
+              загрузки и сессии пользователя <b style={{ color: T.ink }}>{user.name}</b> (@{user.login}),
+              подключённый бот — отключён. Данные не восстановить (кроме как из бэкапа).
+            </div>
+            <div style={{ color: T.inkMuted, fontSize: 12, marginBottom: 6 }}>
+              Для подтверждения введи логин <code style={{ color: T.ink }}>{user.login}</code>:
+            </div>
+            <input
+              autoFocus value={typed} onChange={(e) => setTyped(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+              placeholder={user.login}
+              style={{ width: '100%', padding: '10px 13px', borderRadius: 10, fontSize: 14,
+                       background: T.bg, border: `1px solid ${match ? '#f87171' : T.border}`,
+                       color: T.ink, fontFamily: T.fontMono, outline: 'none', boxSizing: 'border-box' }}
+            />
+            {error && <div style={{ marginTop: 10, color: '#fca5a5', fontSize: 12 }}>{error}</div>}
+            <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'flex-end' }}>
+              <button onClick={onClose} disabled={busy}
+                      style={{ padding: '9px 16px', borderRadius: 10, fontSize: 13, background: T.bg,
+                               border: `1px solid ${T.border}`, color: T.inkSoft }}>
+                Отмена
+              </button>
+              <button onClick={submit} disabled={!match || busy}
+                      style={{ padding: '9px 16px', borderRadius: 10, fontSize: 13,
+                               background: match ? 'rgba(248,113,113,0.18)' : T.bg,
+                               border: `1px solid ${match ? 'rgba(248,113,113,0.6)' : T.border}`,
+                               color: match ? '#f87171' : T.inkMuted,
+                               cursor: match && !busy ? 'pointer' : 'default', opacity: busy ? 0.6 : 1 }}>
+                {busy ? 'Удаляю…' : 'Удалить навсегда'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

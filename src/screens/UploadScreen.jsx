@@ -1,16 +1,23 @@
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import { T } from '../theme.js';
 import { uploadLabPdf, confirmLabPdf, cancelLabPdf } from '../api.js';
 
 // Вкладка «Загрузить анализы». Пакетная загрузка: выбор нескольких PDF или
 // перетаскивание из Finder/Explorer. Каждый файл — своя карточка-превью со своим
 // подтверждением; сверху «Залить все». Только PDF-анализы с текстовым слоем.
+//
+// Drag-and-drop: пока файл тащат над ЛЮБОЙ частью страницы — на весь экран
+// выезжает подсвеченная landing zone (оверлей), чтобы было очевидно, что можно
+// бросать. Ловим на уровне window; счётчик dragenter/dragleave гасит мерцание
+// при переходе курсора между вложенными элементами.
 let _uid = 0;
 
 export default function UploadScreen({ onCommitted }) {
   const [items, setItems] = useState([]); // {id,name,phase,preview,message,dup,error}
-  const [drag, setDrag] = useState(false);
+  const [dragOver, setDragOver] = useState(false); // курсор с файлом над локальной зоной
+  const [windowDrag, setWindowDrag] = useState(false); // файл тащат где-то над окном
   const inputRef = useRef(null);
+  const dragDepth = useRef(0);
 
   const patch = (id, p) => setItems((xs) => xs.map((it) => (it.id === id ? { ...it, ...p } : it)));
 
@@ -31,10 +38,43 @@ export default function UploadScreen({ onCommitted }) {
     }));
   }, []);
 
+  // Тащат ли именно файлы (а не выделенный текст/картинку со страницы).
+  const hasFiles = (e) => Array.from(e.dataTransfer?.types || []).includes('Files');
+
+  // Оконный слушатель: показываем landing zone на весь экран, пока над окном файл.
+  useEffect(() => {
+    const onEnter = (e) => {
+      if (!hasFiles(e)) return;
+      dragDepth.current += 1;
+      setWindowDrag(true);
+    };
+    const onOver = (e) => { if (hasFiles(e)) e.preventDefault(); }; // без этого браузер откроет файл
+    const onLeave = (e) => {
+      if (!hasFiles(e)) return;
+      dragDepth.current = Math.max(0, dragDepth.current - 1);
+      if (dragDepth.current === 0) { setWindowDrag(false); setDragOver(false); }
+    };
+    const onDropWin = (e) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      dragDepth.current = 0;
+      setWindowDrag(false);
+      setDragOver(false);
+      addFiles(e.dataTransfer?.files);
+    };
+    window.addEventListener('dragenter', onEnter);
+    window.addEventListener('dragover', onOver);
+    window.addEventListener('dragleave', onLeave);
+    window.addEventListener('drop', onDropWin);
+    return () => {
+      window.removeEventListener('dragenter', onEnter);
+      window.removeEventListener('dragover', onOver);
+      window.removeEventListener('dragleave', onLeave);
+      window.removeEventListener('drop', onDropWin);
+    };
+  }, [addFiles]);
+
   const onPick = (e) => { addFiles(e.target.files); if (inputRef.current) inputRef.current.value = ''; };
-  const onDrop = (e) => { e.preventDefault(); setDrag(false); addFiles(e.dataTransfer?.files); };
-  const onDragOver = (e) => { e.preventDefault(); if (!drag) setDrag(true); };
-  const onDragLeave = (e) => { e.preventDefault(); setDrag(false); };
 
   async function confirmItem(it, refresh = true) {
     if (!it.preview?.pending_id) return false;
@@ -70,7 +110,10 @@ export default function UploadScreen({ onCommitted }) {
   const doneCount = items.filter((it) => it.phase === 'done').length;
 
   return (
-    <div onDrop={onDrop} onDragOver={onDragOver} onDragLeave={onDragLeave}>
+    <div>
+      {/* Полноэкранная landing zone во время перетаскивания над окном */}
+      <DropOverlay active={windowDrag} hot={dragOver} />
+
       <h2 style={{ fontFamily: T.fontDisplay, fontStyle: 'italic', fontWeight: 500, color: T.ink, fontSize: 22, margin: '0 0 6px' }}>
         Загрузить анализы
       </h2>
@@ -84,17 +127,20 @@ export default function UploadScreen({ onCommitted }) {
 
       {/* Зона выбора / перетаскивания */}
       <label
+        onDragEnter={() => setDragOver(true)}
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
         style={{
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8,
           padding: '30px 20px', borderRadius: 16, cursor: 'pointer', textAlign: 'center',
-          background: drag ? 'rgba(129,140,248,0.12)' : T.card,
-          border: `1.5px dashed ${drag ? T.accent : T.border}`, color: T.inkSoft,
+          background: dragOver ? 'rgba(129,140,248,0.14)' : T.card,
+          border: `1.5px dashed ${dragOver ? T.accent : T.border}`, color: T.inkSoft,
           transition: 'background 120ms, border-color 120ms',
         }}
       >
         <PdfIcon />
         <div style={{ fontSize: 15, color: T.ink }}>
-          {drag ? 'Отпусти файлы здесь' : 'Перетащи PDF сюда или нажми, чтобы выбрать'}
+          {dragOver ? 'Отпусти файлы здесь' : 'Перетащи PDF сюда или нажми, чтобы выбрать'}
         </div>
         <div style={{ fontSize: 12, color: T.inkMuted, fontFamily: T.fontMono }}>можно несколько файлов сразу</div>
         <input ref={inputRef} type="file" accept="application/pdf,.pdf" multiple onChange={onPick} style={{ display: 'none' }} />
@@ -121,6 +167,40 @@ export default function UploadScreen({ onCommitted }) {
           <Card key={it.id} it={it} onConfirm={() => confirmItem(it)} onCancel={() => cancelItem(it)} />
         ))}
       </div>
+    </div>
+  );
+}
+
+// Полноэкранный оверлей-подсказка: выезжает, пока файл тащат над окном.
+// pointerEvents:none — сам оверлей не перехватывает drop, событие ловит window.
+function DropOverlay({ active }) {
+  if (!active) return null;
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000, pointerEvents: 'none',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+        background: 'rgba(15,17,26,0.72)', backdropFilter: 'blur(3px)',
+        animation: 'dropfade 120ms ease-out',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14,
+          width: 'min(560px, 90vw)', padding: '48px 32px', borderRadius: 24, textAlign: 'center',
+          border: `2.5px dashed ${T.accent}`, background: 'rgba(129,140,248,0.10)',
+          boxShadow: '0 20px 80px rgba(0,0,0,0.45)',
+        }}
+      >
+        <div style={{ transform: 'scale(1.6)', marginBottom: 6 }}><PdfIcon /></div>
+        <div style={{ fontFamily: T.fontDisplay, fontStyle: 'italic', fontWeight: 500, color: T.ink, fontSize: 26, lineHeight: 1.1 }}>
+          Отпусти файлы здесь
+        </div>
+        <div style={{ color: T.inkSoft, fontSize: 14 }}>
+          Разберу все PDF-анализы и покажу превью по каждому
+        </div>
+      </div>
+      <style>{`@keyframes dropfade { from { opacity: 0 } to { opacity: 1 } }`}</style>
     </div>
   );
 }

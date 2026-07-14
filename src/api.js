@@ -96,6 +96,9 @@ export const adminResetCode = (userId) =>
   req('/admin/reset_code', { method: 'POST', json: { user_id: userId } });
 export const adminRejects = (userId) =>
   req(`/admin/rejects?user_id=${encodeURIComponent(userId)}`);
+export const adminDeleteUser = (userId, confirmLogin) =>
+  req(`/admin/user?user_id=${encodeURIComponent(userId)}&confirm=${encodeURIComponent(confirmLogin)}`,
+      { method: 'DELETE' });
 
 // --- Всё разом для useHealthData -------------------------------------------
 
